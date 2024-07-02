@@ -2,12 +2,12 @@ import csv
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from functools import wraps
 from urllib.parse import urljoin
 
 from selenium import webdriver
 from selenium.common import NoSuchElementException
 from selenium.webdriver.common.by import By
+from tqdm import tqdm
 
 # urls for scrapping
 BASE_URL = "https://webscraper.io/"
@@ -48,19 +48,6 @@ class AbstractParser(ABC):
         pass
 
 
-def timer(func: callable) -> callable:
-    @wraps(func)
-    def wrapper(*args, **kwargs) -> callable:
-        start_time = time.time()
-        result = func(*args, **kwargs)
-        end_time = time.time()
-        elapsed_time = end_time - start_time
-        print(f"Executed in {elapsed_time: .2f} seconds")
-        return result
-
-    return wrapper
-
-
 def create_csv_file(file_name: str, list_of_products: list[Product]) -> None:
     """
     Creates csv file with list of products and its attributes
@@ -87,7 +74,6 @@ class ElectronicProductParser(AbstractParser):
         self.driver = driver
         self.cookies_accepted = False
 
-    @timer
     def parse_page(self, url: str, file_name: str) -> list[Product]:
         self.driver.get(url)
 
@@ -98,27 +84,36 @@ class ElectronicProductParser(AbstractParser):
 
         items = self.driver.find_elements(By.CLASS_NAME, PRODUCT_WRAPPER_CLASS)
         list_of_products = []
-        for item in items:
-            title = item.find_element(
-                By.CLASS_NAME, PRODUCT_TITLE_CLASS
-            ).get_attribute("title")
-            description = item.find_element(
-                By.CLASS_NAME, PRODUCT_DESCRIPTION_CLASS
-            ).text
-            price = float(
-                item.find_element(By.CLASS_NAME, PRODUCT_PRICE_CLASS).text[1:]
-            )
-            rating = len(
-                item.find_elements(By.CLASS_NAME, PRODUCT_RATING_CLASS)
-            )
-            num_of_reviews = int(
-                item.find_element(
-                    By.CLASS_NAME, PRODUCT_REVIEW_COUNT_CLASS
-                ).text.split()[0]
-            )
-            list_of_products.append(
-                Product(title, description, price, rating, num_of_reviews)
-            )
+
+        # tqdm for progress tracking visualization
+        with tqdm(
+            total=len(items), desc="Parsing Products", unit_scale=True
+        ) as pbar:
+            for item in items:
+                title = item.find_element(
+                    By.CLASS_NAME, PRODUCT_TITLE_CLASS
+                ).get_attribute("title")
+                description = item.find_element(
+                    By.CLASS_NAME, PRODUCT_DESCRIPTION_CLASS
+                ).text
+                price = float(
+                    item.find_element(By.CLASS_NAME, PRODUCT_PRICE_CLASS).text[
+                        1:
+                    ]
+                )
+                rating = len(
+                    item.find_elements(By.CLASS_NAME, PRODUCT_RATING_CLASS)
+                )
+                num_of_reviews = int(
+                    item.find_element(
+                        By.CLASS_NAME, PRODUCT_REVIEW_COUNT_CLASS
+                    ).text.split()[0]
+                )
+                list_of_products.append(
+                    Product(title, description, price, rating, num_of_reviews)
+                )
+
+                pbar.update(1)
 
         create_csv_file(file_name, list_of_products)
         return list_of_products
