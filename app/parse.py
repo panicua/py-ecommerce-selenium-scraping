@@ -2,35 +2,33 @@ import csv
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from urllib.parse import urljoin
 
 from selenium import webdriver
 from selenium.common import NoSuchElementException
 from selenium.webdriver.common.by import By
+from selenium.webdriver.remote.webelement import WebElement
 from tqdm import tqdm
 
-# urls for scrapping
-BASE_URL = "https://webscraper.io/"
-HOME_URL = urljoin(BASE_URL, "test-sites/e-commerce/more/")
-COMPUTERS_URL = urljoin(HOME_URL, "computers")
-LAPTOPS_URL = urljoin(HOME_URL, "computers/laptops")
-TABLETS_URL = urljoin(HOME_URL, "computers/tablets")
-PHONES_URL = urljoin(HOME_URL, "phones")
-TOUCH_URL = urljoin(HOME_URL, "phones/touch")
+from app.constants import (
+    ACCEPT_COOKIES_CLASS,
+    PRODUCT_WRAPPER_CLASS,
+    PRODUCT_TITLE_CLASS,
+    PRODUCT_DESCRIPTION_CLASS,
+    PRODUCT_PRICE_CLASS,
+    PRODUCT_RATING_CLASS,
+    PRODUCT_REVIEW_COUNT_CLASS,
+    PAGINATION_BUTTON_CLASS,
+    HOME_URL,
+    COMPUTERS_URL,
+    LAPTOPS_URL,
+    TABLETS_URL,
+    PHONES_URL,
+    TOUCH_URL,
+)
 
 # selenium startup options
 options = webdriver.ChromeOptions()
 options.add_argument("--headless")
-
-# selenium constants
-ACCEPT_COOKIES_CLASS = "acceptCookies"
-PRODUCT_WRAPPER_CLASS = "product-wrapper"
-PRODUCT_TITLE_CLASS = "title"
-PRODUCT_DESCRIPTION_CLASS = "description"
-PRODUCT_PRICE_CLASS = "price"
-PRODUCT_RATING_CLASS = "ws-icon-star"
-PRODUCT_REVIEW_COUNT_CLASS = "review-count"
-PAGINATION_BUTTON_CLASS = "ecomerce-items-scroll-more"
 
 
 @dataclass
@@ -87,28 +85,14 @@ class ElectronicProductParser(AbstractParser):
 
         # tqdm for progress tracking visualization
         with tqdm(
-            total=len(items), desc="Parsing Products", unit_scale=True
+                total=len(items), desc="Parsing Products", unit_scale=True
         ) as pbar:
             for item in items:
-                title = item.find_element(
-                    By.CLASS_NAME, PRODUCT_TITLE_CLASS
-                ).get_attribute("title")
-                description = item.find_element(
-                    By.CLASS_NAME, PRODUCT_DESCRIPTION_CLASS
-                ).text
-                price = float(
-                    item.find_element(By.CLASS_NAME, PRODUCT_PRICE_CLASS).text[
-                        1:
-                    ]
-                )
-                rating = len(
-                    item.find_elements(By.CLASS_NAME, PRODUCT_RATING_CLASS)
-                )
-                num_of_reviews = int(
-                    item.find_element(
-                        By.CLASS_NAME, PRODUCT_REVIEW_COUNT_CLASS
-                    ).text.split()[0]
-                )
+                title = self.get_title(item)
+                description = self.get_description(item)
+                price = self.get_price(item)
+                rating = self.get_rating(item)
+                num_of_reviews = self.get_num_of_reviews(item)
                 list_of_products.append(
                     Product(title, description, price, rating, num_of_reviews)
                 )
@@ -149,6 +133,38 @@ class ElectronicProductParser(AbstractParser):
             except NoSuchElementException:
                 break
         time.sleep(1)
+
+    @staticmethod
+    def get_title(item: WebElement) -> str:
+        return item.find_element(
+            By.CLASS_NAME, PRODUCT_TITLE_CLASS
+        ).get_attribute("title")
+
+    @staticmethod
+    def get_description(item: WebElement) -> str:
+        return item.find_element(
+            By.CLASS_NAME, PRODUCT_DESCRIPTION_CLASS
+        ).text
+
+    @staticmethod
+    def get_price(item: WebElement) -> float:
+        return float(
+            item.find_element(By.CLASS_NAME, PRODUCT_PRICE_CLASS).text[1:]
+        )
+
+    @staticmethod
+    def get_rating(item: WebElement) -> int:
+        return len(
+            item.find_elements(By.CLASS_NAME, PRODUCT_RATING_CLASS)
+        )
+
+    @staticmethod
+    def get_num_of_reviews(item: WebElement) -> int:
+        return int(
+            item.find_element(
+                By.CLASS_NAME, PRODUCT_REVIEW_COUNT_CLASS
+            ).text.split()[0]
+        )
 
 
 def get_all_products() -> None:
